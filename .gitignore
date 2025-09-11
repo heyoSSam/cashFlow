@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+*.egg
+*.log
+
+# Virtualenv
+venv/
+.env/
+.venv/
+env/
+ENV/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests / Coverage
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+htmlcov/
+
+# Byte-compiled / cache
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# Docker
+*.pid
+*.seed
+*.tar
+*.db
+*.sqlite3
+docker-compose.override.yml
+
+# Local configs
+*.local
+*.envrc
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+dist/
+*.bak
+*.tmp
+
+# Jupyter (если используешь для тестов)
+.ipynb_checkpoints/
