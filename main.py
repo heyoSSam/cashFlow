@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from service.approval.check_tax import main_router
+from service.approval.check_debt import main_router
 from service.preapproval.calc_ep import pre_router
 app = FastAPI()
 
