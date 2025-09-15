@@ -3,6 +3,7 @@ from fastapi import APIRouter, UploadFile, File
 from starlette.responses import PlainTextResponse
 import tempfile, os
 
+from parser.forte_bank import find_debt_forte
 from parser.kaspi_bank import table_find_kaspi_debt
 from parser.tax_org import table_find_tax_sp
 
@@ -53,5 +54,22 @@ async def root(file: UploadFile = File(...)):
         else:
             return "Задолженность имеется"
 
+    finally:
+        os.unlink(temp_path)
+
+@main_router.post("/debtCheckForte", response_class=PlainTextResponse)
+async def root(file: UploadFile = File(...)):
+    content = await file.read()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(content)
+        temp_path = tmp.name
+
+    try:
+        found = find_debt_forte(temp_path)
+        if found:
+            return "Задолженность отсутствует"
+        else:
+            return "Задолженность имеется"
     finally:
         os.unlink(temp_path)
