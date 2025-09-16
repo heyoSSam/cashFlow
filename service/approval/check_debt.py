@@ -12,7 +12,7 @@ main_router = APIRouter(
     prefix="/approval",
 )
 
-@main_router.post("/taxCheck", response_class=PlainTextResponse)
+@main_router.post("/taxDebtCheck", response_class=PlainTextResponse)
 async def root(file: UploadFile = File(...)):
     content = await file.read()
 
