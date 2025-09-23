@@ -47,23 +47,3 @@ def table_find_decl220(file_path):
             return {"ep": 0}
     else:
         raise ValueError("Доход не найден")
-
-def table_find_decl913(file_path):
-    with pdfplumber.open(file_path) as pdf:
-        page = pdf.pages[0]
-        text = page.extract_text()
-
-    match = re.search(r'Сумма облагаемого дохода, в том числе(?:\s+)?([\d\s]+)', text)
-    if match:
-        numbers_str = match.group(1) or ""
-        numbers_str = numbers_str.strip()
-        if numbers_str:
-            number = int(''.join(numbers_str.split()))
-            return {"ep": round(number / 3, 3)}
-        else:
-            return {"ep": 0}
-    else:
-        raise ValueError("Доход не найден")
-
-if __name__ == "__main__":
-    print(table_find_decl913("../913.pdf"))

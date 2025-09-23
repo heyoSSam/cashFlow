@@ -1,20 +1,18 @@
 import re,io,os, importlib.util
 from dotenv import load_dotenv
 
-from fastapi import APIRouter, FastAPI, File, UploadFile, Form
+from fastapi import APIRouter, File, UploadFile, Form
 from tempfile import NamedTemporaryFile
-from fastapi.responses import StreamingResponse
-from fastapi.responses import PlainTextResponse
 
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.agents.agent_types import AgentType
 from langchain_google_genai import ChatGoogleGenerativeAI
 from starlette.responses import JSONResponse
 
-from parser.bcc_bank import table_find_bcc_vp
-from parser.alatau_bank import table_find_alatau_vp
-from parser.kaspi_bank import table_find_kaspi_vp
-from parser.tax_org import table_find_decl910, table_find_decl220, table_find_decl913
+from parser.bcc_bank import table_find_bcc_vp, bin_find_bcc_vp
+from parser.alatau_bank import table_find_alatau_vp, bin_find_alatau_vp
+from parser.kaspi_bank import table_find_kaspi_vp, bin_find_kaspi_vp
+from parser.tax_org import table_find_decl910, table_find_decl220
 from service.constants import PERCENTAGES
 
 load_dotenv()
@@ -35,6 +33,7 @@ async def root(
     files: list[UploadFile] = File(...),
     banks: list[str] = Form(...),
     activity: str = Form(...),
+    bin: int = Form(...),
     ids_to_exclude: list[str] = Form(None)
 ):
 
@@ -51,10 +50,8 @@ async def root(
                     res = table_find_decl910(temp_path)
                 elif bank == "decl220":
                     res = table_find_decl220(temp_path)
-                elif bank == "decl913":
-                    res = table_find_decl913(temp_path)
                 else:
-                    res = calc_ep_vyp(temp_path, bank, ids_to_exclude)
+                    res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
                 results.append({"bank": bank, "ep": res["ep"]})
             finally:
                 os.unlink(temp_path)
@@ -65,13 +62,16 @@ async def root(
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
-def calc_ep_vyp(temp_path, bank, ids_to_exclude):
+def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     if bank == "kaspi":
         df = table_find_kaspi_vp(temp_path)
+        bin_find = bin_find_kaspi_vp(temp_path)
     elif bank == "alatau":
         df = table_find_alatau_vp(temp_path)
+        bin_find = bin_find_alatau_vp(temp_path)
     elif bank == "bcc":
         df = table_find_bcc_vp(temp_path)
+        bin_find = bin_find_bcc_vp(temp_path)
     else:
         return "Ошибка: неизвестный банк"
 
@@ -103,7 +103,7 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude):
     Дополнительно убирай строки, если они содержат значения из списка ids_to_exclude={ids_to_exclude} —
     это может быть отдельная колонка БИН получателя, либо значения внутри колонки Наименование получателя или схожее название по смыслу. Искать только у получателей.
 
-    Напиши функцию table_cleaner(df), которая принимает DataFrame df и возвращает словарь в формате {{"ep": round(number / 6, 3)}}. 
+    Напиши функцию table_cleaner(df), которая принимает DataFrame df и возвращает словарь в формате {{"ep": round(number / количество месяцев, 3)}}. 
 
     Требования:
     1. Функция должна использовать pandas.
@@ -131,4 +131,9 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude):
     agent_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(agent_module)
 
-    return agent_module.table_cleaner(df)
+    if bin == bin_find:
+        return agent_module.table_cleaner(df)
+    elif ids_to_exclude and bin_find in ids_to_exclude:
+        return {"ep": agent_module.table_cleaner(df) * 0.5}
+    else:
+        return {"ep": 0}

@@ -1,5 +1,7 @@
 import camelot
 import pandas as pd
+import pdfplumber
+import re
 
 def table_find_alatau_vp(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
@@ -24,3 +26,14 @@ def table_find_alatau_vp(file_path):
     combined_df.columns = combined_df.iloc[0].str.replace("\n", " ", regex=False).str.strip()
     combined_df = combined_df.drop(0).reset_index(drop=True)
     return combined_df[:-1]
+
+def bin_find_alatau_vp(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        page = pdf.pages[0]
+        text = page.extract_text()
+
+    match = re.search(r'ИИН\s*\(БИН\)\s*:\s*(\d+)', text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    else:
+        return None

@@ -1,6 +1,7 @@
 import camelot
 import pandas as pd
 import pdfplumber
+import re
 
 def table_find_kaspi_vp(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
@@ -30,5 +31,13 @@ def table_find_kaspi_debt(file_path):
 
     return df
 
-if __name__ == "__main__":
-    print(table_find_kaspi_debt("../kaspi_debt.pdf").columns.tolist())
+def bin_find_kaspi_vp(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        page = pdf.pages[0]
+        text = page.extract_text()
+
+    match = re.search(r'(?:ИИН|БИН)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    else:
+        return None
