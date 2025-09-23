@@ -14,7 +14,8 @@ from starlette.responses import JSONResponse
 from parser.bcc_bank import table_find_bcc_vp
 from parser.alatau_bank import table_find_alatau_vp
 from parser.kaspi_bank import table_find_kaspi_vp
-from parser.tax_org import table_find_decl910
+from parser.tax_org import table_find_decl910, table_find_decl220, table_find_decl913
+from service.constants import PERCENTAGES
 
 load_dotenv()
 pre_router = APIRouter(
@@ -33,6 +34,7 @@ llm = ChatGoogleGenerativeAI(
 async def root(
     files: list[UploadFile] = File(...),
     banks: list[str] = Form(...),
+    activity: str = Form(...),
     ids_to_exclude: list[str] = Form(None)
 ):
 
@@ -45,8 +47,12 @@ async def root(
                 temp_path = tmp.name
 
             try:
-                if bank == "decl":
+                if bank == "decl910":
                     res = table_find_decl910(temp_path)
+                elif bank == "decl220":
+                    res = table_find_decl220(temp_path)
+                elif bank == "decl913":
+                    res = table_find_decl913(temp_path)
                 else:
                     res = calc_ep_vyp(temp_path, bank, ids_to_exclude)
                 results.append({"bank": bank, "ep": res["ep"]})
@@ -54,7 +60,7 @@ async def root(
                 os.unlink(temp_path)
 
         total = sum(r["ep"] for r in results)
-        return JSONResponse(content={"results": results, "total": total})
+        return JSONResponse(content={"results": results, "total": round(total * PERCENTAGES[activity], 3)})
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -106,6 +112,8 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude):
     4. Проверить, что после группировки есть минимум 6 месяцев. Если меньше — вернуть {{"error": "выписка не пригодна"}}.
     5. В коде должно быть только функция и импорт библиотек.
     6. Никаких комментариев и лишнего текста в коде.
+    
+    Верни код в ```
     """
 
     raw_output = agent.invoke(task)
