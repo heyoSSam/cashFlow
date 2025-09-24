@@ -1,16 +1,18 @@
-import re,io,os, importlib.util
+import re,os, importlib.util
 from dotenv import load_dotenv
 
 from fastapi import APIRouter, File, UploadFile, Form
+from fastapi.responses import JSONResponse
 from tempfile import NamedTemporaryFile
 
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain.agents.agent_types import AgentType
 from langchain_google_genai import ChatGoogleGenerativeAI
-from starlette.responses import JSONResponse
 
 from parser.bcc_bank import table_find_bcc_vp, bin_find_bcc_vp, date_find_bcc_vp
 from parser.alatau_bank import table_find_alatau_vp, bin_find_alatau_vp, date_find_alatau_vp
+from parser.forte_bank import table_find_forte_vp, bin_find_forte_vp, date_find_forte_vp
+from parser.halyk_bank import table_find_halyk_vp, bin_find_halyk_vp, date_find_halyk_vp
 from parser.kaspi_bank import table_find_kaspi_vp, bin_find_kaspi_vp, date_find_kaspi_vp
 from parser.tax_org import table_find_decl910, table_find_decl220
 from service.constants import PERCENTAGES
@@ -27,13 +29,6 @@ llm = ChatGoogleGenerativeAI(
     temperature=0,
     google_api_key=api_key
 )
-
-from fastapi import UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from tempfile import NamedTemporaryFile
-from datetime import datetime
-import os
-
 
 def periods_overlap(start1, end1, start2, end2):
     return not (end1 < start2 or end2 < start1)
@@ -116,8 +111,16 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
         df = table_find_bcc_vp(temp_path)
         bin_find = bin_find_bcc_vp(temp_path)
         start_date, end_date = date_find_bcc_vp(temp_path)
+    elif bank == "halyk":
+        df = table_find_halyk_vp(temp_path)
+        bin_find = bin_find_halyk_vp(temp_path)
+        start_date, end_date = date_find_halyk_vp(temp_path)
+    elif bank == "forte":
+        df = table_find_forte_vp(temp_path)
+        bin_find = bin_find_forte_vp(temp_path)
+        start_date, end_date = date_find_forte_vp(temp_path)
     else:
-        return "Ошибка: неизвестный банк"
+        return JSONResponse(content={"error": "Неизвестный банк"}, status_code=400)
 
     agent = create_pandas_dataframe_agent(
         llm,
@@ -132,8 +135,17 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     Тебе надо прочитать и проанализировать df и написать универсальный код который применим ко всей df, 
     и обязательно сохрани изначальное название колонок и их количество. 
     Подготовить данные (задать соответствующий тип для колонок: кредит, дебет это float(errors='coerce' нельзя использовать на колонках Дебет и Кредит) 
-    и колонки связанные с датой давать параметр dayfirst=True, в таблице имеются числа формата 725 \\n000,00 
-    для них нужно вместо \\n ставить пробел, убирать оставшиеся пробелы и заменять запятую на .), 
+    и колонки связанные с датой давать параметр dayfirst=True
+    В таблице встречаются числа в разных форматах (например: "725 \n000,00", "5,040,000.00", "800.000.00").
+    Твоя задача — привести их к единому числовому формату с двумя знаками после точки (например: 725000.00).
+    
+    Правила обработки:
+    1. Убрать символы переноса строки и заменить их пробелом.
+    2. Удалить все пробелы внутри числа.
+    3. Если используется запятая как разделитель десятых, заменить её на точку.
+    4. Убрать все лишние разделители тысяч (точки, запятые или пробелы внутри числа), оставить только один десятичный разделитель — точку.
+    5. Если после точки больше двух цифр, округлить до двух знаков.
+    6. Вернуть результат строго в числовом виде, например: 725000.00, 5040000.00, 800000.00.
     посчитать чистые ежемесячные обороты. 
     Под чистыми подразумевается только транзакции реальной деятельности, а не переводы собственных средств и т.д. 
     Убирай строки где номера колонок, а не информация. 
