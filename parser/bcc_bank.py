@@ -2,6 +2,7 @@ import camelot
 import pdfplumber
 import re
 import pandas as pd
+from datetime import datetime
 
 def table_find_bcc_vp(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
@@ -40,5 +41,18 @@ def bin_find_bcc_vp(file_path):
     else:
         return None
 
+def date_find_bcc_vp(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        page = pdf.pages[0]
+        text = page.extract_text()
+
+    match = re.search(r"Движения по счету\s*[cC]\s*(\d{2}\.\d{2}\.\d{4})\s*по\s*(\d{2}\.\d{2}\.\d{4})", text)
+    if match:
+        start_date = datetime.strptime(match.group(1), "%d.%m.%Y").date()
+        end_date = datetime.strptime(match.group(2), "%d.%m.%Y").date()
+        return start_date, end_date
+    else:
+        return {"error": "Период не найден"}
+
 if __name__ == "__main__":
-    print(bin_find_bcc_vp("C:\\Users\PW.DESKTOP-BIOB19V\Desktop\декл+выписка\М-03-96БР-2025\выписка бцк.pdf"))
+    print(date_find_bcc_vp("C:\\Users\PW.DESKTOP-BIOB19V\Desktop\декл+выписка\М-03-96БР-2025\выписка бцк.pdf"))

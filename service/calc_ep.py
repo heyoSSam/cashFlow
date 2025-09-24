@@ -9,9 +9,9 @@ from langchain.agents.agent_types import AgentType
 from langchain_google_genai import ChatGoogleGenerativeAI
 from starlette.responses import JSONResponse
 
-from parser.bcc_bank import table_find_bcc_vp, bin_find_bcc_vp
-from parser.alatau_bank import table_find_alatau_vp, bin_find_alatau_vp
-from parser.kaspi_bank import table_find_kaspi_vp, bin_find_kaspi_vp
+from parser.bcc_bank import table_find_bcc_vp, bin_find_bcc_vp, date_find_bcc_vp
+from parser.alatau_bank import table_find_alatau_vp, bin_find_alatau_vp, date_find_alatau_vp
+from parser.kaspi_bank import table_find_kaspi_vp, bin_find_kaspi_vp, date_find_kaspi_vp
 from parser.tax_org import table_find_decl910, table_find_decl220
 from service.constants import PERCENTAGES
 
@@ -28,15 +28,25 @@ llm = ChatGoogleGenerativeAI(
     google_api_key=api_key
 )
 
+from fastapi import UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from tempfile import NamedTemporaryFile
+from datetime import datetime
+import os
+
+
+def periods_overlap(start1, end1, start2, end2):
+    return not (end1 < start2 or end2 < start1)
+
+
 @pre_router.post("/ep")
 async def root(
-    files: list[UploadFile] = File(...),
-    banks: list[str] = Form(...),
-    activity: str = Form(...),
-    bin: int = Form(...),
-    ids_to_exclude: list[str] = Form(None)
+        files: list[UploadFile] = File(...),
+        banks: list[str] = Form(...),
+        activity: str = Form(...),
+        bin: int = Form(...),
+        ids_to_exclude: list[str] = Form(None)
 ):
-
     results = []
     try:
         for file, bank in zip(files, banks):
@@ -52,12 +62,43 @@ async def root(
                     res = table_find_decl220(temp_path)
                 else:
                     res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
-                results.append({"bank": bank, "ep": res["ep"]})
+
+                results.append({
+                    "bank": bank,
+                    "ep": res["ep"],
+                    "start_date": res["start_date"],
+                    "end_date": res["end_date"]
+                })
             finally:
                 os.unlink(temp_path)
 
-        total = sum(r["ep"] for r in results)
-        return JSONResponse(content={"results": results, "total": round(total * PERCENTAGES[activity], 3)})
+        filtered_results = []
+
+        if any(r["bank"] == "decl220" for r in results):
+            filtered_results = [r for r in results if r["bank"] == "decl220"]
+        elif any(r["bank"] == "decl910" for r in results):
+            for r in results:
+                if r["bank"] == "decl910":
+                    overlap = any(periods_overlap(r["start_date"], r["end_date"],
+                                                  fr["start_date"], fr["end_date"])
+                                  for fr in filtered_results)
+                    if not overlap:
+                        filtered_results.append(r)
+        else:
+            for r in results:
+                if r["bank"] not in ["decl220", "decl910"]:
+                    overlap = any(periods_overlap(r["start_date"], r["end_date"],
+                                                  fr["start_date"], fr["end_date"])
+                                  for fr in filtered_results)
+                    if not overlap:
+                        filtered_results.append(r)
+
+        total = sum(r["ep"] for r in filtered_results)
+
+        return JSONResponse(content={
+            "results": results,
+            "total": round(total * PERCENTAGES[activity], 3)
+        })
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -66,12 +107,15 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     if bank == "kaspi":
         df = table_find_kaspi_vp(temp_path)
         bin_find = bin_find_kaspi_vp(temp_path)
+        start_date, end_date = date_find_kaspi_vp(temp_path)
     elif bank == "alatau":
         df = table_find_alatau_vp(temp_path)
         bin_find = bin_find_alatau_vp(temp_path)
+        start_date, end_date = date_find_alatau_vp(temp_path)
     elif bank == "bcc":
         df = table_find_bcc_vp(temp_path)
         bin_find = bin_find_bcc_vp(temp_path)
+        start_date, end_date = date_find_bcc_vp(temp_path)
     else:
         return "Ошибка: неизвестный банк"
 
@@ -132,8 +176,14 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     spec.loader.exec_module(agent_module)
 
     if bin == bin_find:
-        return agent_module.table_cleaner(df)
+        ep_res = agent_module.table_cleaner(df)
     elif ids_to_exclude and bin_find in ids_to_exclude:
-        return {"ep": agent_module.table_cleaner(df) * 0.5}
+        ep_res = {"ep": agent_module.table_cleaner(df) * 0.5}
     else:
-        return {"ep": 0}
+        ep_res = {"ep": 0}
+
+    return {
+        "ep": ep_res["ep"],
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat()
+    }
