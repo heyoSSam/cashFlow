@@ -62,7 +62,8 @@ async def root(
                     "bank": bank,
                     "ep": res["ep"],
                     "start_date": res["start_date"],
-                    "end_date": res["end_date"]
+                    "end_date": res["end_date"],
+                    "bin": res["bin"]
                 })
             finally:
                 os.unlink(temp_path)
@@ -70,21 +71,36 @@ async def root(
         filtered_results = []
 
         if any(r["bank"] == "decl220" for r in results):
-            filtered_results = [r for r in results if r["bank"] == "decl220"]
-        elif any(r["bank"] == "decl910" for r in results):
-            for r in results:
-                if r["bank"] == "decl910":
-                    overlap = any(periods_overlap(r["start_date"], r["end_date"],
-                                                  fr["start_date"], fr["end_date"])
-                                  for fr in filtered_results)
+            filtered_results = []
+            for bin_value in set(r["bin"] for r in results if r["bank"] == "decl220"):
+                bin_results = [r for r in results if r["bank"] == "decl220" and r["bin"] == bin_value]
+                for r in bin_results:
+                    overlap = any(
+                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
+                        for fr in filtered_results if fr["bin"] == bin_value
+                    )
                     if not overlap:
                         filtered_results.append(r)
+
+        elif any(r["bank"] == "decl910" for r in results):
+            for bin_value in set(r["bin"] for r in results if r["bank"] == "decl910"):
+                bin_results = [r for r in results if r["bank"] == "decl910" and r["bin"] == bin_value]
+                for r in bin_results:
+                    overlap = any(
+                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
+                        for fr in filtered_results if fr["bin"] == bin_value
+                    )
+                    if not overlap:
+                        filtered_results.append(r)
+
         else:
-            for r in results:
-                if r["bank"] not in ["decl220", "decl910"]:
-                    overlap = any(periods_overlap(r["start_date"], r["end_date"],
-                                                  fr["start_date"], fr["end_date"])
-                                  for fr in filtered_results)
+            for bin_value in set(r["bin"] for r in results):
+                bin_results = [r for r in results if r["bin"] == bin_value]
+                for r in bin_results:
+                    overlap = any(
+                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
+                        for fr in filtered_results if fr["bin"] == bin_value
+                    )
                     if not overlap:
                         filtered_results.append(r)
 
@@ -96,7 +112,7 @@ async def root(
         })
 
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        return JSONResponse(content={"error": "here"}, status_code=500)
 
 def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     if bank == "kaspi":
@@ -197,5 +213,6 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     return {
         "ep": ep_res["ep"],
         "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat()
+        "end_date": end_date.isoformat(),
+        "bin": bin
     }
