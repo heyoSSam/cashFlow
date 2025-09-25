@@ -59,8 +59,12 @@ async def root(
                 for temp_path, bank in zip(temp_paths, banks):
                     if bank == "decl910":
                         res = table_find_decl910(temp_path)
+                        if res[0]["bin"] != bin or res[0]["bin"] not in ids_to_exclude:
+                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)"}, status_code=400)
                     elif bank == "decl220":
                         res = table_find_decl220(temp_path)
+                        if res[0]["bin"] != bin or res[0]["bin"] not in ids_to_exclude:
+                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)"}, status_code=400)
                     else:
                         res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
 
@@ -235,6 +239,6 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
         for r in ep_result:
             r["bin"] = bin
     else:
-        ep_result = [{"error": "Выписка неизвестного лица", "bin": bin}]
+        ep_result = [{"error": "Выписка неизвестного лица (выписка)", "bin": bin}]
 
     return ep_result
