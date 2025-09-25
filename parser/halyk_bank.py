@@ -35,7 +35,7 @@ def bin_find_halyk_vp(file_path):
 
     match = re.search(r'(?:ИИН|БИН)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
     if match:
-        return int(match.group(1))
+        return match.group(1)
     else:
         return None
 
@@ -54,6 +54,3 @@ def date_find_halyk_vp(file_path):
         return start_date, end_date
     else:
         return {"error": "Период не найден"}
-
-if __name__ == "__main__":
-    print(bin_find_halyk_vp("C:\\Users\PW.DESKTOP-BIOB19V\Desktop\\test\M-12-24\\1\Справка БВУ выписка_Халык.pdf"))

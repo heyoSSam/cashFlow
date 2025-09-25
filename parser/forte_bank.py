@@ -48,7 +48,7 @@ def bin_find_forte_vp(file_path):
 
     match = re.search(r'(?:БИН|ИИН|БСН|ЖСН)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
     if match:
-        return int(match.group(1))
+        return match.group(1)
     else:
         return None
 
@@ -68,6 +68,3 @@ def date_find_forte_vp(file_path):
         return start_date, end_date
     else:
         return {"error": "Период не найден"}
-
-if __name__ == "__main__":
-    print(bin_find_forte_vp("C:\\Users\PW.DESKTOP-BIOB19V\Desktop\\test\М-03-134\\2\Выписка Forte.pdf"))

@@ -37,7 +37,7 @@ def bin_find_bcc_vp(file_path):
 
     match = re.search(r'(?:ЖСН|ИИН)\s*[:\-]?\s*(\d+)', text, re.IGNORECASE)
     if match:
-        return int(match.group(1))
+        return match.group(1)
     else:
         return None
 
@@ -53,6 +53,3 @@ def date_find_bcc_vp(file_path):
         return start_date, end_date
     else:
         return {"error": "Период не найден"}
-
-if __name__ == "__main__":
-    print(date_find_bcc_vp("C:\\Users\PW.DESKTOP-BIOB19V\Desktop\декл+выписка\М-03-96БР-2025\выписка бцк.pdf"))

@@ -33,86 +33,106 @@ llm = ChatGoogleGenerativeAI(
 def periods_overlap(start1, end1, start2, end2):
     return not (end1 < start2 or end2 < start1)
 
-
 @pre_router.post("/ep")
 async def root(
-        files: list[UploadFile] = File(...),
-        banks: list[str] = Form(...),
-        activity: str = Form(...),
-        bin: int = Form(...),
-        ids_to_exclude: list[str] = Form(None)
+    files: list[UploadFile] = File(...),
+    banks: list[str] = Form(...),
+    activity: str = Form(...),
+    bin: str = Form(...),
+    ids_to_exclude: list[str] = Form(None)
 ):
-    results = []
+    MAX_RETRIES = 3
+    file_bytes_list = [await f.read() for f in files]
+    temp_paths = []
     try:
-        for file, bank in zip(files, banks):
-            content = await file.read()
-            with NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                tmp.write(content)
-                temp_path = tmp.name
+        for content in file_bytes_list:
+            tmp = NamedTemporaryFile(suffix=".pdf", delete=False)
+            tmp.write(content)
+            tmp.flush()
+            tmp.close()
+            temp_paths.append(tmp.name)
 
+        attempt = 0
+        while attempt < MAX_RETRIES:
             try:
-                if bank == "decl910":
-                    res = table_find_decl910(temp_path)
-                elif bank == "decl220":
-                    res = table_find_decl220(temp_path)
-                else:
-                    res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
+                results = []
+                for temp_path, bank in zip(temp_paths, banks):
+                    if bank == "decl910":
+                        res = table_find_decl910(temp_path)
+                    elif bank == "decl220":
+                        res = table_find_decl220(temp_path)
+                    else:
+                        res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
 
-                results.append({
-                    "bank": bank,
-                    "ep": res["ep"],
-                    "start_date": res["start_date"],
-                    "end_date": res["end_date"],
-                    "bin": res["bin"]
+                    for row in res:
+                        if "error" in row:
+                            return JSONResponse(content=row, status_code=400)
+                        results.append({
+                            "bank": bank,
+                            "ep": row["ep"],
+                            "start_date": row["start_date"],
+                            "end_date": row["end_date"],
+                            "bin": row["bin"]
+                        })
+
+                decl_banks = {"decl910", "decl220"}
+                filtered_results = []
+                total = 0
+
+                for bin_value in set(r["bin"] for r in results):
+                    bin_results = [r for r in results if r["bin"] == bin_value]
+
+                    decl_results = [r for r in bin_results if r["bank"] in decl_banks]
+                    other_results = [r for r in bin_results if r["bank"] not in decl_banks]
+
+                    decl_results.sort(key=lambda x: 1 if x["bank"] == "decl910" else 0)
+
+                    covered_periods = []
+                    vp_sum = 0
+                    vp_months = 0
+
+                    for d in decl_results:
+                        overlap = any(
+                            periods_overlap(d["start_date"], d["end_date"], c["start_date"], c["end_date"])
+                            for c in covered_periods
+                        )
+                        if not overlap:
+                            total += d["ep"]
+                            filtered_results.append(d)
+                            covered_periods.append(d)
+
+                    for r in other_results:
+                        overlap = any(
+                            periods_overlap(r["start_date"], r["end_date"], c["start_date"], c["end_date"])
+                            for c in covered_periods
+                        )
+                        if not overlap:
+                            vp_sum += r["ep"]
+                            vp_months += 1
+                            filtered_results.append(r)
+
+                    if vp_months > 0:
+                        total += vp_sum / vp_months
+
+                total = round(total * PERCENTAGES[activity], 3)
+
+                return JSONResponse(content={
+                    "results": results,
+                    "total": total
                 })
-            finally:
-                os.unlink(temp_path)
 
-        filtered_results = []
+            except Exception as e:
+                attempt += 1
+                if attempt >= MAX_RETRIES:
+                    return JSONResponse(content={"error": str(e)}, status_code=500)
 
-        if any(r["bank"] == "decl220" for r in results):
-            filtered_results = []
-            for bin_value in set(r["bin"] for r in results if r["bank"] == "decl220"):
-                bin_results = [r for r in results if r["bank"] == "decl220" and r["bin"] == bin_value]
-                for r in bin_results:
-                    overlap = any(
-                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
-                        for fr in filtered_results if fr["bin"] == bin_value
-                    )
-                    if not overlap:
-                        filtered_results.append(r)
-
-        elif any(r["bank"] == "decl910" for r in results):
-            for bin_value in set(r["bin"] for r in results if r["bank"] == "decl910"):
-                bin_results = [r for r in results if r["bank"] == "decl910" and r["bin"] == bin_value]
-                for r in bin_results:
-                    overlap = any(
-                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
-                        for fr in filtered_results if fr["bin"] == bin_value
-                    )
-                    if not overlap:
-                        filtered_results.append(r)
-
-        else:
-            for bin_value in set(r["bin"] for r in results):
-                bin_results = [r for r in results if r["bin"] == bin_value]
-                for r in bin_results:
-                    overlap = any(
-                        periods_overlap(r["start_date"], r["end_date"], fr["start_date"], fr["end_date"])
-                        for fr in filtered_results if fr["bin"] == bin_value
-                    )
-                    if not overlap:
-                        filtered_results.append(r)
-
-        total = sum(r["ep"] for r in filtered_results)
-
-        return JSONResponse(content={
-            "results": results,
-            "total": round(total * PERCENTAGES[activity], 3)
-        })
-
-    except Exception as e:
-        return JSONResponse(content={"error": "here"}, status_code=500)
+    finally:
+        for p in temp_paths:
+            try:
+                if os.path.exists(p):
+                    os.unlink(p)
+            except Exception:
+                pass
 
 def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     if bank == "kaspi":
@@ -154,7 +174,7 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     и колонки связанные с датой давать параметр dayfirst=True
     В таблице встречаются числа в разных форматах (например: "725 \n000,00", "5,040,000.00", "800.000.00").
     Твоя задача — привести их к единому числовому формату с двумя знаками после точки (например: 725000.00).
-    
+
     Правила обработки:
     1. Убрать символы переноса строки и заменить их пробелом.
     2. Удалить все пробелы внутри числа.
@@ -175,16 +195,23 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     Дополнительно убирай строки, если они содержат значения из списка ids_to_exclude={ids_to_exclude} —
     это может быть отдельная колонка БИН получателя, либо значения внутри колонки Наименование получателя или схожее название по смыслу. Искать только у получателей.
 
-    Напиши функцию table_cleaner(df), которая принимает DataFrame df и возвращает словарь в формате {{"ep": round(number / количество месяцев, 3)}}. 
+    Напиши функцию table_cleaner(df), которая принимает DataFrame df и возвращает список словарей ежемесячных оборотов. Все даты возвращай строго в формате YYYY-MM-DD, без времени. 
+    Используй .date().isoformat() для start_date и end_date..
+    Каждый словарь должен быть в формате:
+    {{
+        "ep": число_оборот_за_этот_месяц,
+        "start_date": дата_начала_месяца,
+        "end_date": дата_конца_месяца
+    }}
 
     Требования:
     1. Функция должна использовать pandas.
-    2. Рассчитывать ежемесячные обороты по колонкам "дебет" и "кредит".
+    2. Рассчитывать ежемесячные обороты по колонке "кредит".
     3. После группировки по месяцам использовать groupby(..., as_index=False).
-    4. Проверить, что после группировки есть минимум 6 месяцев. Если меньше — вернуть {{"error": "выписка не пригодна"}}.
+    4. Проверить, что после группировки есть минимум 6 месяцев. Если меньше — вернуть [{{"error": "выписка не пригодна"}}].
     5. В коде должно быть только функция и импорт библиотек.
     6. Никаких комментариев и лишнего текста в коде.
-    
+
     Верни код в ```
     """
 
@@ -203,16 +230,11 @@ def calc_ep_vyp(temp_path, bank, ids_to_exclude, bin):
     agent_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(agent_module)
 
-    if bin == bin_find:
-        ep_res = agent_module.table_cleaner(df)
-    elif ids_to_exclude and bin_find in ids_to_exclude:
-        ep_res = {"ep": agent_module.table_cleaner(df) * 0.5}
+    if bin == bin_find or (ids_to_exclude and bin_find in ids_to_exclude):
+        ep_result = agent_module.table_cleaner(df)
+        for r in ep_result:
+            r["bin"] = bin
     else:
-        ep_res = {"ep": 0}
+        ep_result = [{"error": "Выписка неизвестного лица", "bin": bin}]
 
-    return {
-        "ep": ep_res["ep"],
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "bin": bin
-    }
+    return ep_result

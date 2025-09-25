@@ -29,9 +29,9 @@ def table_find_decl910(file_path):
         numbers_str = numbers_str.strip()
         if numbers_str:
             number = int(''.join(numbers_str.split()))
-            return {"ep": round(number / 6, 3), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}
+            return [{"ep": round(number / 6, 3), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}]
         else:
-            return {"ep": 0, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}
+            return [{"ep": 0, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}]
     else:
         raise ValueError("Доход не найден")
 
@@ -48,11 +48,17 @@ def table_find_decl220(file_path):
         numbers_str = numbers_str.strip()
         if numbers_str:
             number = int(''.join(numbers_str.split()))
-            return {"ep": round(number / 12, 3), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}
+            return [{"ep": round(number / 12, 3), "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}]
         else:
-            return {"ep": 0, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}
+            return [{"ep": 0, "start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "bin": bin}]
     else:
-        raise ValueError("Доход не найден")
+        return [{
+            "ep": 0,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "bin": bin,
+            "error": "Доход не найден"
+        }]
 
 def date_find_decl910(file_path):
     with pdfplumber.open(file_path) as pdf:
@@ -101,6 +107,6 @@ def bin_find_decl(file_path):
     match = re.search(r"(?:ИИН\s*\(БИН\)|ИИН|БИН)\s*[:\-]?\s*([\d\s]+)", text, re.IGNORECASE)
     if match:
         number_str = match.group(1)
-        number = int("".join(number_str.split()))
+        number = "".join(number_str.split())
         return number
     raise HTTPException(status_code=400, detail="ИИН/БИН не найден")
