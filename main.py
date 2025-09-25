@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from service.check_debt import main_router
-from service.calc_ep import pre_router
+from service.calc_ep.handler import pre_router
 app = FastAPI()
 
 app.add_middleware(

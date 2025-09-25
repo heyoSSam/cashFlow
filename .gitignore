@@ -61,3 +61,5 @@ dist/
 
 # Jupyter (если используешь для тестов)
 .ipynb_checkpoints/
+
+agent_generated.py
