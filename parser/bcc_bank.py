@@ -4,7 +4,7 @@ import re
 import pandas as pd
 from datetime import datetime
 
-def table_find_bcc_vp(file_path):
+def table_find_bcc_vp_ur(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
 
     if not tables:

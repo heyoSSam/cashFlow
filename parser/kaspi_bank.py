@@ -4,7 +4,7 @@ import pdfplumber
 import re
 from datetime import datetime
 
-def table_find_kaspi_vp(file_path):
+def table_find_kaspi_vp_ur(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
 
     if not tables:
@@ -55,3 +55,23 @@ def date_find_kaspi_vp(file_path):
         return start_date, end_date
     else:
         return {"error": "Период не найден"}
+
+def table_find_kaspi_vp_fl(file_path):
+    all_rows = []
+
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            table = page.extract_table()
+            if table:
+                all_rows.extend(table)
+
+    if not all_rows:
+        raise ValueError("All tables are empty or no tables found in PDF")
+
+    header, *data = all_rows
+    df = pd.DataFrame(data, columns=header)
+
+    return df
+
+if __name__ == "__main__":
+    print(table_find_kaspi_vp_fl(r"C:\Users\PW.DESKTOP-BIOB19V\Desktop\test\М-25-31\ФО Выписка по счету KaspiGod.pdf").head())

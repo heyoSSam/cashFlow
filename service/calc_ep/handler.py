@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from tempfile import NamedTemporaryFile
 
 from parser.tax_org import table_find_decl910, table_find_decl220
-from service.calc_ep.calc_ep import calc_ep_vyp, periods_overlap
+from service.calc_ep.calc_ep import calc_ep_vyp_ur, periods_overlap, calc_ep_vyp_fl
 from service.calc_ep.constants import PERCENTAGES
 
 load_dotenv()
@@ -40,14 +40,18 @@ async def root(
                 for temp_path, bank in zip(temp_paths, banks):
                     if bank == "decl910":
                         res = table_find_decl910(temp_path)
-                        if res[0]["bin"] != bin and res[0]["bin"] not in ids_to_exclude:
-                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)", "bin": res[0]["bin"]}, status_code=400)
+                        if res[0]["bin"] != bin and (res[0]["bin"] not in ids_to_exclude):
+                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)", "bin": res[0]["bin"], "binDec": bin}, status_code=400)
                     elif bank == "decl220":
                         res = table_find_decl220(temp_path)
-                        if res[0]["bin"] != bin and res[0]["bin"] not in ids_to_exclude:
-                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)", "bin": res[0]["bin"]}, status_code=400)
+                        if res[0]["bin"] != bin and (res[0]["bin"] not in ids_to_exclude):
+                            return JSONResponse(content={"error": "БИН/ИИН неизвестного лица (декларация)", "bin": res[0]["bin"], "binDec": bin}, status_code=400)
+                    elif bank in ("flkaspi", "flforte", "flhalyk", "flalatau", "flbcc"):
+                        res = calc_ep_vyp_fl(temp_path, bank, ids_to_exclude, bin)
+                    elif bank in ("urkaspi", "urforte", "urhalyk", "uralatau", "urbcc"):
+                        res = calc_ep_vyp_ur(temp_path, bank, ids_to_exclude, bin)
                     else:
-                        res = calc_ep_vyp(temp_path, bank, ids_to_exclude, bin)
+                        return JSONResponse(content={"error": "Unknown bank"}, status_code=400)
 
                     for row in res:
                         if "error" in row:

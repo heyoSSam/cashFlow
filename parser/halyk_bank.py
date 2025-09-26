@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 
 
-def table_find_halyk_vp(file_path):
+def table_find_halyk_vp_ur(file_path):
     all_dfs = []
 
     with pdfplumber.open(file_path) as pdf:

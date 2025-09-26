@@ -108,5 +108,6 @@ def bin_find_decl(file_path):
     if match:
         number_str = match.group(1)
         number = "".join(number_str.split())
+        number = number[:12]
         return number
     raise HTTPException(status_code=400, detail="ИИН/БИН не найден")

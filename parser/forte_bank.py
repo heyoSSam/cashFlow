@@ -15,7 +15,7 @@ def find_debt_forte(file_path):
 
     return found
 
-def table_find_forte_vp(file_path):
+def table_find_forte_vp_ur(file_path):
     tables = camelot.read_pdf(file_path, pages='all')
 
     if not tables:
