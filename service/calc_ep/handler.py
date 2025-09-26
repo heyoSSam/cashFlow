@@ -9,7 +9,6 @@ from parser.tax_org import table_find_decl910, table_find_decl220
 from service.calc_ep.calc_ep import calc_ep_vyp_ur, periods_overlap, calc_ep_vyp_fl
 from service.calc_ep.constants import PERCENTAGES
 
-load_dotenv()
 pre_router = APIRouter(
     prefix="/preapproval",
 )

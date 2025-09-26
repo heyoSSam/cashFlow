@@ -7,18 +7,17 @@ from langchain.agents.agent_types import AgentType
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from config import settings
 from parser.bcc_bank import table_find_bcc_vp_ur, bin_find_bcc_vp
 from parser.alatau_bank import table_find_alatau_vp_ur, bin_find_alatau_vp
 from parser.forte_bank import table_find_forte_vp_ur, bin_find_forte_vp
 from parser.halyk_bank import table_find_halyk_vp_ur, bin_find_halyk_vp
 from parser.kaspi_bank import table_find_kaspi_vp_ur, bin_find_kaspi_vp, table_find_kaspi_vp_fl
 
-api_key = os.getenv("GOOGLE_API_KEY")
-
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-pro",
     temperature=0,
-    google_api_key=api_key
+    google_api_key=settings.google_api_key,
 )
 
 def periods_overlap(start1, end1, start2, end2):
